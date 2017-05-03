@@ -3,6 +3,10 @@ webhook-postbuild-plugin
 
 Posts build status to an HTTP/s endpoint.
 
+Forked from the following Plugin which used to post artifacts (DLLS, JARs etc) to an endpoint.
+
+https://wiki.jenkins-ci.org/display/JENKINS/HTTP+POST+Plugin
+
 This plugin is configured on the System settings page in Jenkins.
 
 Developing the plugin:
