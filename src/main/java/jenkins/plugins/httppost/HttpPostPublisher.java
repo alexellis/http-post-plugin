@@ -17,15 +17,12 @@ import hudson.model.BuildListener;
 import hudson.model.ListView;
 import hudson.model.Result;
 import hudson.model.Run;
-<<<<<<< HEAD
 import hudson.model.TopLevelItem;
 import hudson.model.View;
 import hudson.model.Run.Summary;
 import hudson.scm.ChangeLogSet;
 import hudson.scm.ChangeLogSet.Entry;
-=======
 import hudson.model.Run.Summary;
->>>>>>> Fork plugin to post build status, not artifacts.
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Notifier;
@@ -44,8 +41,6 @@ import net.sf.json.JSONObject;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
-//import org.json.JSONObject;
-
 
 /**
  * Upload all {@link hudson.model.Run.Artifact artifacts} using a multipart HTTP POST call to an
@@ -53,6 +48,7 @@ import org.kohsuke.stapler.StaplerRequest;
  * Job-Name}, {@code Build-Number} and {@code Build-Timestamp} are included automatically by the
  * time writing.
  *
+ * @author Alex Ellis
  * @author Christian Becker (christian.becker.1987@gmail.com)
  */
 @SuppressWarnings("UnusedDeclaration") // This class will be loaded using its Descriptor.
@@ -76,8 +72,7 @@ public class HttpPostPublisher extends Notifier {
       return true;
     }
 
-    try {
-<<<<<<< HEAD
+    try {   
       JSONObject json = new JSONObject();
     	
       JSONArray views = getViews(build.getProject());
@@ -104,29 +99,16 @@ public class HttpPostPublisher extends Notifier {
       OkHttpClient client = new OkHttpClient();
       Proxy proxy = Proxy.NO_PROXY;
 	  client.setProxy(proxy);
-=======
-      FormEncodingBuilder form = new FormEncodingBuilder();
-      form.add("result", buildResult);
-      form.add("buildNumber", build.getId());
-      form.add("jobName", build.getProject().getName());
-      form.add("buildNumber", String.valueOf(build.getNumber()));
-      form.add("buildTimestamp", String.valueOf(build.getTimeInMillis()));
-      
-      OkHttpClient client = new OkHttpClient();
->>>>>>> Fork plugin to post build status, not artifacts.
-      client.setConnectTimeout(10, TimeUnit.SECONDS);
+
+
+	  client.setConnectTimeout(10, TimeUnit.SECONDS);
       client.setReadTimeout(10, TimeUnit.SECONDS);
 
       Request.Builder builder = new Request.Builder();
       builder.url(url);
-<<<<<<< HEAD
       MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
       String content = json.toString(1);
       builder.post(RequestBody.create(MEDIA_TYPE_JSON, content) );
-=======
-
-      builder.post(form.build());
->>>>>>> Fork plugin to post build status, not artifacts.
 
       Request request = builder.build();
 
