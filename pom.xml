@@ -11,12 +11,12 @@
   </parent>
 
   <!--<groupId>org.jenkins-ci.plugins</groupId>-->
-  <artifactId>http-post</artifactId>
+  <artifactId>http-post-status</artifactId>
   <version>1.3-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
-  <name>HTTP POST Plugin</name>
-  <description>Publish the artifacts via HTTP POST to an URL</description>
+  <name>HTTP POST Status Plugin</name>
+  <description>HTTP POST build status to an URL</description>
   <url>https://wiki.jenkins-ci.org/display/JENKINS/HTTP+POST+Plugin</url>
 
   <properties>

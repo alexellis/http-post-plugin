@@ -2,3 +2,7 @@
 target
 work
 *.iml
+/bin/
+.classpath
+.settings
+.project

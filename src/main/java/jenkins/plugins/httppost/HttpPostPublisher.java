@@ -1,6 +1,8 @@
 package jenkins.plugins.httppost;
 
+import com.squareup.okhttp.FormEncodingBuilder;
 import com.squareup.okhttp.Headers;
+import com.squareup.okhttp.MediaType;
 import com.squareup.okhttp.MultipartBuilder;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
@@ -9,22 +11,37 @@ import com.squareup.okhttp.Response;
 import hudson.Extension;
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
+import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
+import hudson.model.ListView;
 import hudson.model.Result;
 import hudson.model.Run;
+import hudson.model.TopLevelItem;
+import hudson.model.View;
+import hudson.model.Run.Summary;
+import hudson.scm.ChangeLogSet;
+import hudson.scm.ChangeLogSet.Entry;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Notifier;
 import hudson.tasks.Publisher;
 import hudson.util.FormValidation;
+import jenkins.model.Jenkins;
+
+import java.net.Proxy;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
+//import org.json.JSONObject;
+
 
 /**
  * Upload all {@link hudson.model.Run.Artifact artifacts} using a multipart HTTP POST call to an
@@ -44,17 +61,9 @@ public class HttpPostPublisher extends Notifier {
   @SuppressWarnings({"unchecked", "deprecation"})
   @Override
   public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) {
-    if (build.getResult().isWorseOrEqualTo(Result.FAILURE)) {
-      listener.getLogger().println("HTTP POST: Skipping because of FAILURE");
-      return true;
-    }
-
-    List<Run.Artifact> artifacts = build.getArtifacts();
-    if (artifacts.isEmpty()) {
-      listener.getLogger().println("HTTP POST: No artifacts to POST");
-      return true;
-    }
-
+    
+	String buildResult = build.getResult().toString();
+	  
     Descriptor descriptor = getDescriptor();
     String url = descriptor.url;
     String headers = descriptor.headers;
@@ -64,32 +73,43 @@ public class HttpPostPublisher extends Notifier {
     }
 
     try {
-      MultipartBuilder multipart = new MultipartBuilder();
-      multipart.type(MultipartBuilder.FORM);
-      for (Run.Artifact artifact : artifacts) {
-        multipart.addFormDataPart(artifact.getFileName(), artifact.getFileName(),
-            RequestBody.create(null, artifact.getFile()));
-      }
+      JSONObject json = new JSONObject();
+    	
+      JSONArray views = getViews(build.getProject());
+      JSONArray changeSets = getChangesets(build);
+      
+      json.accumulate("result", buildResult);
+      json.accumulate("buildNumber", build.getId());
+      json.accumulate("jobName", build.getProject().getName());
+      json.accumulate("buildTimestamp", String.valueOf(build.getTimeInMillis()));
+      json.accumulate("displayName", build.getProject().getDisplayName());
+      json.accumulate("fullDisplayName", build.getProject().getFullDisplayName());
+      json.accumulate("duration", build.getDurationString());
+      json.accumulate("nodeName", build.getBuiltOn().getNodeName());
+      
+      final Jenkins jenkins = Jenkins.getInstance();
 
+      json.accumulate("jenkinsUrl", jenkins.getUrl());
+      json.accumulate("projectUrl", build.getUrl());
+      
+      json.accumulate("changesets", changeSets);   
+
+      json.put("views", views);
+      
       OkHttpClient client = new OkHttpClient();
-      client.setConnectTimeout(30, TimeUnit.SECONDS);
-      client.setReadTimeout(60, TimeUnit.SECONDS);
+      Proxy proxy = Proxy.NO_PROXY;
+	  client.setProxy(proxy);
+      client.setConnectTimeout(10, TimeUnit.SECONDS);
+      client.setReadTimeout(10, TimeUnit.SECONDS);
 
       Request.Builder builder = new Request.Builder();
       builder.url(url);
-      builder.header("Job-Name", build.getProject().getName());
-      builder.header("Build-Number", String.valueOf(build.getNumber()));
-      builder.header("Build-Timestamp", String.valueOf(build.getTimeInMillis()));
-      if (headers != null && headers.length() > 0) {
-        String[] lines = headers.split("\r?\n");
-        for (String line : lines) {
-          int index = line.indexOf(':');
-          builder.header(line.substring(0, index).trim(), line.substring(index + 1).trim());
-        }
-      }
-      builder.post(multipart.build());
+      MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
+      String content = json.toString(1);
+      builder.post(RequestBody.create(MEDIA_TYPE_JSON, content) );
 
       Request request = builder.build();
+
       listener.getLogger().println(String.format("---> POST %s", url));
       listener.getLogger().println(request.headers());
 
@@ -107,7 +127,34 @@ public class HttpPostPublisher extends Notifier {
     return true;
   }
 
-  @Override
+  private JSONArray getChangesets(AbstractBuild build) {
+	  JSONArray list = new JSONArray();
+      for (Object item : build.getChangeSet().getItems())
+      {
+    	  ChangeLogSet.Entry entry = (ChangeLogSet.Entry)item;
+    	  list.add(entry.getCommitId());
+      }
+      return list;
+}
+
+private JSONArray getViews(AbstractProject project) {
+      final Jenkins jenkins = Jenkins.getInstance();
+      JSONArray  views = new JSONArray();
+      
+      for (View view: jenkins.getViews()) {
+          if (view instanceof ListView) {
+          	
+  			for (TopLevelItem item : view.getItems()) {
+  				if (((AbstractItem) item).equals(project)) {
+  					views.add(view.getViewName());
+  				}
+  			}
+          }
+      }
+      return views;
+}
+
+@Override
   public BuildStepMonitor getRequiredMonitorService() {
     return BuildStepMonitor.NONE;
   }
@@ -134,7 +181,7 @@ public class HttpPostPublisher extends Notifier {
 
     @Override
     public String getDisplayName() {
-      return "HTTP POST artifacts to an URL";
+      return "HTTP POST build status to an URL";
     }
 
     public FormValidation doCheckUrl(@QueryParameter String value) {
@@ -179,7 +226,7 @@ public class HttpPostPublisher extends Notifier {
 
     @Override
     public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
-      req.bindJSON(this, json.getJSONObject("http-post"));
+      req.bindJSON(this, json.getJSONObject("http-post-status"));
       save();
 
       return true;
